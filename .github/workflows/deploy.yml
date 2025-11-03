@@ -1,0 +1,41 @@
+cd /home/compspice/nextjs-app
+cat > .github/workflows/deploy.yml <<'YAML'
+name: Deploy to Server
+
+on:
+  push:
+    branches:
+      - main   # поменяй на master, если у тебя master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Test SSH connectivity (from Runner)
+        run: |
+          echo "Testing SSH connectivity..."
+          ssh -o StrictHostKeyChecking=no -i /tmp/deploy_key -o ConnectTimeout=10 ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} "echo SSH_OK || true"
+        env:
+          SERVER_IP: ${{ secrets.SERVER_IP }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+        shell: bash
+
+      - name: Deploy via SSH (run commands on server)
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            cd /home/compspice/nextjs-app
+            git fetch --all
+            git reset --hard origin/main
+            npm ci
+            npm run build
+            # Перезапустить приложение. Если используешь pm2:
+            pm2 restart compspice || pm2 start npm --name "compspice" -- run start
+YAML
+
